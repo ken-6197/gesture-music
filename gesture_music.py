@@ -1,8 +1,3 @@
-"""
-Gesture Piano  —  keyboard/organ sound, fixed finger counting
-MediaPipe Tasks API  (mediapipe >= 0.10.x)
-"""
-
 import cv2
 import numpy as np
 import pygame
@@ -17,9 +12,6 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions, RunningMode
 from mediapipe import Image, ImageFormat
 
-# ---------------------------------------------------------------------------
-# Model download
-# ---------------------------------------------------------------------------
 MODEL_URL  = (
     "https://storage.googleapis.com/mediapipe-models/"
     "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -46,9 +38,6 @@ if not MODEL_PATH.exists():
 else:
     print(f"Model found: {MODEL_PATH.name}")
 
-# ---------------------------------------------------------------------------
-# Keyboard / organ sound  (slower attack than piano, no harsh beat)
-# ---------------------------------------------------------------------------
 pygame.mixer.init(frequency=44100, size=-16, channels=2)
 
 def create_keyboard_tone(frequency, duration=2.0, volume=0.32):
@@ -63,15 +52,13 @@ def create_keyboard_tone(frequency, duration=2.0, volume=0.32):
     n    = int(sr * duration)
     t    = np.linspace(0, duration, n, endpoint=False)
 
-    # Harmonics
     wave  = 1.00 * np.sin(2 * np.pi * frequency * t)
     wave += 0.40 * np.sin(2 * np.pi * frequency * 2 * t)
     wave += 0.15 * np.sin(2 * np.pi * frequency * 3 * t)
 
-    # Envelope: 40 ms attack ramp, then slow exponential decay (tau = 1.8 s)
     attack_n = int(0.04 * sr)
-    envelope = np.exp(-t / 1.8)                      # slow decay
-    envelope[:attack_n] *= np.linspace(0, 1, attack_n)  # smooth attack
+    envelope = np.exp(-t / 1.8)                     
+    envelope[:attack_n] *= np.linspace(0, 1, attack_n)  
 
     wave = wave * envelope * volume
     wave16 = (wave * 32767).clip(-32768, 32767).astype(np.int16)
@@ -81,12 +68,12 @@ def create_keyboard_tone(frequency, duration=2.0, volume=0.32):
 NOTE_FREQS  = {0: 261.63, 1: 293.66, 2: 329.63, 3: 349.23, 4: 392.00, 5: 440.00}
 NOTE_NAMES  = {0: "C", 1: "D", 2: "E", 3: "F", 4: "G", 5: "A"}
 NOTE_COLORS = {
-    0: (80,  80,  255),   # blue   — C
-    1: (80,  180, 255),   # cyan   — D
-    2: (60,  210,  90),   # green  — E
-    3: (200, 210,  30),   # yellow — F
-    4: (255, 140,  20),   # orange — G
-    5: (255,  60,  60),   # red    — A
+    0: (80,  80,  255),   
+    1: (80,  180, 255),  
+    2: (60,  210,  90),   
+    3: (200, 210,  30),   
+    4: (255, 140,  20),   
+    5: (255,  60,  60),   
 }
 
 print("Loading keyboard sounds...")
@@ -95,9 +82,6 @@ for n in range(6):
     print(f"  ok  {NOTE_NAMES[n]}  ({NOTE_FREQS[n]} Hz)")
 print("All sounds ready!\n")
 
-# ---------------------------------------------------------------------------
-# Landmark indices
-# ---------------------------------------------------------------------------
 WRIST     = 0
 THUMB_TIP = 4;  THUMB_IP  = 3;  THUMB_MCP = 2
 INDEX_MCP = 5;  INDEX_PIP = 6;  INDEX_TIP = 8
@@ -105,9 +89,6 @@ MID_MCP   = 9;  MID_PIP   = 10; MID_TIP   = 12
 RING_MCP  = 13; RING_PIP  = 14; RING_TIP  = 16
 PINKY_MCP = 17; PINKY_PIP = 18; PINKY_TIP = 20
 
-# ---------------------------------------------------------------------------
-# Finger counting
-# ---------------------------------------------------------------------------
 def count_fingers(lms):
     """
     Returns 0-5.
@@ -122,7 +103,6 @@ def count_fingers(lms):
 
     count = 0
 
-    # Four fingers — margin 0.02 prevents borderline bent fingers
     for tip, pip in [(INDEX_TIP, INDEX_PIP),
                      (MID_TIP,   MID_PIP),
                      (RING_TIP,  RING_PIP),
@@ -130,20 +110,14 @@ def count_fingers(lms):
         if y(tip) < y(pip) - 0.02:
             count += 1
 
-    # Thumb — two conditions must BOTH be true:
-    #   1. TIP is horizontally far from INDEX_MCP (spread out)
-    #   2. TIP is above (lower y) than THUMB_IP  (not curled under)
     thumb_spread = abs(x(THUMB_TIP) - x(INDEX_MCP))
-    thumb_up     = y(THUMB_TIP) < y(THUMB_IP)        # tip above IP joint
+    thumb_up     = y(THUMB_TIP) < y(THUMB_IP)       
 
     if thumb_spread > 0.07 and thumb_up:
         count += 1
 
     return min(count, 5)
 
-# ---------------------------------------------------------------------------
-# MediaPipe setup
-# ---------------------------------------------------------------------------
 base_opts = mp_python.BaseOptions(model_asset_path=str(MODEL_PATH))
 lm_options = HandLandmarkerOptions(
     base_options=base_opts,
@@ -155,9 +129,6 @@ lm_options = HandLandmarkerOptions(
 )
 landmarker = HandLandmarker.create_from_options(lm_options)
 
-# ---------------------------------------------------------------------------
-# Skeleton drawing
-# ---------------------------------------------------------------------------
 CONNECTIONS = [
     (0,1),(1,2),(2,3),(3,4),
     (0,5),(5,6),(6,7),(7,8),
@@ -176,9 +147,6 @@ def draw_hand(frame, lms, color=(0, 230, 100)):
         r = 6 if i in (4, 8, 12, 16, 20) else 3
         cv2.circle(frame, (px, py), r, color, -1, cv2.LINE_AA)
 
-# ---------------------------------------------------------------------------
-# Main loop
-# ---------------------------------------------------------------------------
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -193,7 +161,7 @@ print("=" * 55)
 finger_history = deque(maxlen=7)
 last_played    = None
 last_play_time = 0.0
-PLAY_DELAY     = 0.6        # seconds before re-triggering same note
+PLAY_DELAY     = 0.6      
 current_color  = (130, 130, 130)
 frame_ts_ms    = 0
 
@@ -219,7 +187,6 @@ while True:
         finger_history.append(raw)
         finger_count = max(set(finger_history), key=finger_history.count)
 
-        # Label above wrist — only after history stabilises
         if len(finger_history) >= 3:
             wx = int(lms[WRIST].x * frame.shape[1])
             wy = int(lms[WRIST].y * frame.shape[0])
@@ -229,7 +196,6 @@ while True:
                         NOTE_COLORS.get(finger_count, (200, 200, 200)),
                         2, cv2.LINE_AA)
 
-    # --- Sound ---
     now = time.time()
     if hand_detected and finger_count in sounds:
         current_color = NOTE_COLORS[finger_count]
@@ -241,21 +207,18 @@ while True:
         elif (now - last_play_time) > PLAY_DELAY:
             sounds[finger_count].play()
             last_play_time = now
-        # Status text — ASCII only, no dashes or special chars
         status = f"PLAYING: {finger_count} finger{'s' if finger_count != 1 else ''}  [{NOTE_NAMES[finger_count]}]"
     else:
         status        = "Show your hand"
         last_played   = None
         current_color = (130, 130, 130)
 
-    # --- HUD panel ---
     ov = frame.copy()
     cv2.rectangle(ov, (10, 10), (420, 75), (0, 0, 0), -1)
     frame = cv2.addWeighted(ov, 0.55, frame, 0.45, 0)
     cv2.putText(frame, status, (20, 52),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.70, current_color, 2, cv2.LINE_AA)
 
-    # --- Virtual keyboard ---
     kw  = 80
     kx0 = (frame.shape[1] - 6 * kw) // 2
     ky  = frame.shape[0] - 80
@@ -274,7 +237,6 @@ while True:
                     (kx + kw//2 - 7, ky + 73),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 1, cv2.LINE_AA)
 
-    # Down-arrow above active key
     if hand_detected and 0 <= finger_count <= 5:
         ax = kx0 + finger_count * kw + kw//2 - 8
         cv2.putText(frame, "v", (ax, ky - 8),
